@@ -6,25 +6,39 @@ services:
     ports:
       - "8000"
     environment:
-      - DATABASE_URL=postgresql://user:password@db:5432/todo_db
+      - DATABASE_URL=postgresql://user:password@db:5432/monitoring_db
+      - FLASK_ENV=testing
+      
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     deploy:
-      replicas: 2  
+      replicas: 2  #could be more for horizontal scaling
       restart_policy:
         condition: on-failure
 
   db:
     image: postgres:13
-    container_name: flask_todo_db
+    container_name: flask_monitoring_db
     environment:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password
-      POSTGRES_DB: todo_db
+      POSTGRES_DB: monitoring_db
     ports:
       - "5432:5432"  
     volumes:
-      - pgdata:/var/lib/postgresql/data  
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "user", "-d", "monitoring_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    command: >
+      bash -c "
+        docker-entrypoint.sh postgres
+        && psql -U user -d monitoring_db -c 'SELECT 1'
+      "
 
   pgadmin:
     image: dpage/pgadmin4 
@@ -38,6 +52,21 @@ services:
       - db  
     volumes:
       - pgadmin-data:/var/lib/pgadmin
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql 
+
+  test:
+    build: .
+    working_dir: /app
+    environment:
+      - DATABASE_URL=postgresql://user:password@db:5432/monitoring_db
+      - FLASK_ENV=testing
+      - PYTHONPATH=/app
+    depends_on:
+      - db
+    volumes:
+      - ./tests:/tests
+      - .:/app
+    command: pytest --maxfail=1 --disable-warnings
 
 volumes:
   pgdata:  
