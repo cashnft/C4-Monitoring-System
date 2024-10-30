@@ -1,11 +1,13 @@
-import time
-from sqlalchemy import Column, Integer, String, Float, DateTime, create_engine
-from sqlalchemy.ext.declarative import declarative_base
+import asyncio
+from sqlalchemy import Column, Integer, String, Float, DateTime
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.ext.declarative import declarative_base
+
+# Create base class for declarative models
 Base = declarative_base()
 
-# Metric model
+#Metric model
 class Metric(Base):
     __tablename__ = "metrics"
 
@@ -24,6 +26,8 @@ class Log(Base):
     level = Column(String, nullable=False)
     message = Column(String, nullable=False)
     timestamp = Column(DateTime, nullable=False)
+
+#trace model
 class Trace(Base):
     __tablename__ = "traces"
 
@@ -34,18 +38,32 @@ class Trace(Base):
     duration = Column(Float, nullable=False)
     timestamp = Column(DateTime, nullable=False)
 
-DATABASE_URL = "postgresql://user:password@db:5432/monitoring_db"
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# Database configuration
+DATABASE_URL = "postgresql+asyncpg://user:password@db:5432/monitoring_db"
+engine = create_async_engine(DATABASE_URL, echo=True)
+AsyncSessionLocal = sessionmaker(
+    engine, 
+    class_=AsyncSession, 
+    expire_on_commit=False
+)
 
-# initialise the database
-def init_db(retries=5, delay=5):
+# database initialization function
+async def init_db(retries=5, delay=5):
     for attempt in range(retries):
         try:
-            Base.metadata.create_all(bind=engine)
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
             return
-        except OperationalError as e:
-            if attempt == retries - 1:  # Last attempt
+        except Exception as e:
+            if attempt == retries - 1:
                 raise e
             print(f"Database connection attempt {attempt + 1} failed. Retrying in {delay} seconds...")
-            time.sleep(delay)
+            await asyncio.sleep(delay)
+
+# Helper function to get DB session
+async def get_db():
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+        finally:
+            await session.close()

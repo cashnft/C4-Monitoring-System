@@ -1,6 +1,9 @@
 flask==2.0.2
-sqlalchemy==1.4.27
+aioflask==0.4.0
+sqlalchemy[asyncio]==1.4.27
+asyncpg==0.27.0
 psycopg2-binary==2.9.1
 prometheus-flask-exporter==0.18.4
-werkzeug==2.0.3  
+werkzeug==2.0.3
 pytest==7.2.2
+pytest-asyncio==0.21.1

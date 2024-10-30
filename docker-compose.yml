@@ -4,18 +4,19 @@ services:
   api:
     build: .
     ports:
-      - "8000"
+      - "5000"  
     environment:
-      - DATABASE_URL=postgresql://user:password@db:5432/monitoring_db
-      - FLASK_ENV=testing
-      
+      - DATABASE_URL=postgresql+asyncpg://user:password@db:5432/monitoring_db
+      - FLASK_ENV=development
+      - PYTHONPATH=/app
     depends_on:
       db:
         condition: service_healthy
     deploy:
-      replicas: 2  #could be more for horizontal scaling
+      replicas: 2
       restart_policy:
         condition: on-failure
+    command: python main.py
 
   db:
     image: postgres:13
@@ -34,11 +35,6 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
-    command: >
-      bash -c "
-        docker-entrypoint.sh postgres
-        && psql -U user -d monitoring_db -c 'SELECT 1'
-      "
 
   pgadmin:
     image: dpage/pgadmin4 
@@ -52,21 +48,6 @@ services:
       - db  
     volumes:
       - pgadmin-data:/var/lib/pgadmin
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql 
-
-  test:
-    build: .
-    working_dir: /app
-    environment:
-      - DATABASE_URL=postgresql://user:password@db:5432/monitoring_db
-      - FLASK_ENV=testing
-      - PYTHONPATH=/app
-    depends_on:
-      - db
-    volumes:
-      - ./tests:/tests
-      - .:/app
-    command: pytest --maxfail=1 --disable-warnings
 
 volumes:
   pgdata:  
